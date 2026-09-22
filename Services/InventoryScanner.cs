@@ -57,6 +57,7 @@ namespace CriticalCommonLib.Services
         private readonly IAddonLifecycle _addonLifecycle;
         private readonly IPlayerState _playerState;
         private readonly ExcelSheet<MirageStoreSetItem> _mirageStoreSetItemSheet;
+        private long _freeCompanyScanRevision;
         public DateTime? _lastStorageCheck;
         public DateTime? _nextBagScan;
 
@@ -419,6 +420,10 @@ namespace CriticalCommonLib.Services
         public delegate void ContainerInfoReceivedDelegate(ContainerInfo containerInfo, InventoryType inventoryType);
 
         public event ContainerInfoReceivedDelegate? ContainerInfoReceived;
+
+        public delegate void FreeCompanyPageScannedDelegate(long scanRevision, InventoryType inventoryType, bool changed);
+
+        public event FreeCompanyPageScannedDelegate? FreeCompanyPageScanned;
 
         private unsafe delegate void* ContainerInfoNetworkData(int a2, int* a3);
 
@@ -1505,53 +1510,73 @@ namespace CriticalCommonLib.Services
 
         public unsafe void ParseFreeCompanyBags(BagChangeContainer changeSet)
         {
+            var scanRevision = System.Threading.Interlocked.Increment(ref _freeCompanyScanRevision);
+
             for (var b = 0; b < _freeCompanyBagTypes.Length; b++)
             {
                 var bagType = _freeCompanyBagTypes[b];
-                if (_loadedInventories.Contains(bagType))
-                {
-                    InMemory.Add(bagType);
-                    var bag = InventoryManager.Instance()->GetInventoryContainer(bagType);
-                    if (bag != null && bag->IsLoaded)
-                    {
-                        InventoryItem[]? fcItems = null;
-                        switch (bagType)
-                        {
-                            case InventoryType.FreeCompanyPage1:
-                                fcItems = FreeCompanyBag1;
-                                break;
-                            case InventoryType.FreeCompanyPage2:
-                                fcItems = FreeCompanyBag2;
-                                break;
-                            case InventoryType.FreeCompanyPage3:
-                                fcItems = FreeCompanyBag3;
-                                break;
-                            case InventoryType.FreeCompanyPage4:
-                                fcItems = FreeCompanyBag4;
-                                break;
-                            case InventoryType.FreeCompanyPage5:
-                                fcItems = FreeCompanyBag5;
-                                break;
-                            case InventoryType.FreeCompanyGil:
-                                fcItems = FreeCompanyGil;
-                                break;
-                            case InventoryType.FreeCompanyCrystals:
-                                fcItems = FreeCompanyCrystals;
-                                break;
-                        }
+                if (!_loadedInventories.Contains(bagType))
+                    continue;
 
-                        if (fcItems != null)
-                            for (var i = 0; i < bag->Size; i++)
-                            {
-                                var fcItem = bag->Items[i];
-                                fcItem.Slot = (short)i;
-                                if (!fcItem.IsSame(fcItems[i]))
-                                {
-                                    fcItems[i] = fcItem;
-                                    changeSet.Add(new BagChange(fcItem, bagType));
-                                }
-                            }
+                var bag = InventoryManager.Instance()->GetInventoryContainer(bagType);
+                if (bag == null || !bag->IsLoaded)
+                    continue;
+
+                InventoryItem[]? fcItems = null;
+                switch (bagType)
+                {
+                    case InventoryType.FreeCompanyPage1:
+                        fcItems = FreeCompanyBag1;
+                        break;
+                    case InventoryType.FreeCompanyPage2:
+                        fcItems = FreeCompanyBag2;
+                        break;
+                    case InventoryType.FreeCompanyPage3:
+                        fcItems = FreeCompanyBag3;
+                        break;
+                    case InventoryType.FreeCompanyPage4:
+                        fcItems = FreeCompanyBag4;
+                        break;
+                    case InventoryType.FreeCompanyPage5:
+                        fcItems = FreeCompanyBag5;
+                        break;
+                    case InventoryType.FreeCompanyGil:
+                        fcItems = FreeCompanyGil;
+                        break;
+                    case InventoryType.FreeCompanyCrystals:
+                        fcItems = FreeCompanyCrystals;
+                        break;
+                }
+
+                if (fcItems == null)
+                    continue;
+
+                var changed = false;
+                for (var i = 0; i < bag->Size; i++)
+                {
+                    var fcItem = bag->Items[i];
+                    fcItem.Slot = (short)i;
+                    if (!fcItem.IsSame(fcItems[i]))
+                    {
+                        changed = true;
+                        fcItems[i] = fcItem;
+                        changeSet.Add(new BagChange(fcItem, bagType));
                     }
+                }
+
+                // InMemory now means that this container was actually read and copied,
+                // not merely that CCL attempted to scan it.
+                InMemory.Add(bagType);
+
+                if (bagType is InventoryType.FreeCompanyPage1 or
+                    InventoryType.FreeCompanyPage2 or
+                    InventoryType.FreeCompanyPage3 or
+                    InventoryType.FreeCompanyPage4 or
+                    InventoryType.FreeCompanyPage5)
+                {
+                    // Emitted synchronously after the page cache is complete. Event
+                    // existence is the completion barrier; changed is only content delta.
+                    FreeCompanyPageScanned?.Invoke(scanRevision, bagType, changed);
                 }
             }
 
@@ -2273,12 +2298,11 @@ namespace CriticalCommonLib.Services
         ~InventoryScanner()
         {
 #if DEBUG
-            // In debug-builds, make sure that a warning is displayed when the Disposable object hasn't been
-            // disposed by the programmer.
+            // In debug-builds, make sure that a warning is displayed when the Disposable object hasn't been disposed by the programmer.
 
             if( _disposed == false )
             {
-                _pluginLog.Error("There is a disposable object which hasn't been disposed before the finalizer call: " + (GetType ().Name));
+                _pluginLog.Error("There is a disposable object which hasn't been disposed before the finalizer call: " + GetType ().Name);
             }
 #endif
             Dispose (true);
