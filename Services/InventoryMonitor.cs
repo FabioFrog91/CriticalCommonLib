@@ -744,6 +744,8 @@ namespace CriticalCommonLib.Services
         {
             if(!_disposed && disposing)
             {
+                _started = false;
+                _inventoryScanner.BagsChanged -= InventoryScannerOnBagsChanged;
                 _characterMonitor.OnCharacterRemoved -= CharacterMonitorOnOnCharacterRemoved;
             }
             _disposed = true;

@@ -2265,6 +2265,7 @@ namespace CriticalCommonLib.Services
                 _characterMonitor.OnActiveHouseChanged -= CharacterMonitorOnOnActiveHouseChanged;
                 _odrScanner.OnSortOrderChanged -= SortOrderChanged;
                 _gameUiManager.UiVisibilityChanged -= GameUiManagerOnUiManagerVisibilityChanged;
+                _addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "MiragePrismPrismBox", PrismBoxFinalize);
             }
             _disposed = true;
         }
