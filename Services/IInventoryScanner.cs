@@ -11,6 +11,7 @@ namespace CriticalCommonLib.Services
         void Enable();
         event InventoryScanner.BagsChangedDelegate? BagsChanged;
         event InventoryScanner.ContainerInfoReceivedDelegate? ContainerInfoReceived;
+        event InventoryScanner.FreeCompanyPageScannedDelegate? FreeCompanyPageScanned;
         void ParseBags();
         InventoryItem[] GetInventoryByType(ulong retainerId, InventoryType type);
         InventoryItem[] GetInventoryByType(InventoryType type);
