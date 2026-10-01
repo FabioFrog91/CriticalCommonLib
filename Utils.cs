@@ -273,8 +273,8 @@ namespace CriticalCommonLib
                                 }
                                 PrintOutObject(value, addr, new List<string>(path));
                                 break;
-                            case Lumina.Text.SeString seString:
-                                ImGui.Text($"{seString.RawString}");
+                            case Lumina.Text.ReadOnly.ReadOnlySeString seString:
+                                ImGui.Text($"{seString}");
                                 break;
                             default:
                                 PrintOutObject(value, addr, new List<string>(path));
